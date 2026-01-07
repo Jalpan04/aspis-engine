@@ -1,4 +1,4 @@
-from runtime.api import Script, Input, GameObject
+from runtime.api import Script
 import pygame
 
 class PaddleController(Script):
@@ -37,5 +37,7 @@ class PaddleController(Script):
         pos[1] += movement * self.speed * dt
         
         # Clamp to screen (approximate)
-        if pos[1] < 50: pos[1] = 50
-        if pos[1] > 550: pos[1] = 550
+        if pos[1] < 50:
+            pos[1] = 50
+        if pos[1] > 550:
+            pos[1] = 550

@@ -1,6 +1,4 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFileSystemModel, QTreeView
-from PySide6.QtCore import QDir
-import os
 
 class AssetBrowser(QWidget):
     def __init__(self, project_root):

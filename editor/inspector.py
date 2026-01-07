@@ -478,7 +478,8 @@ class InspectorPanel(QWidget):
         self.content_layout.addWidget(btn_widget)
 
     def add_rigidbody_editor(self, data, obj):
-        if data is None: data = {}
+        if data is None:
+            data = {}
         header = QLabel("RigidBody")
         header.setStyleSheet("font-weight: bold; color: #777777; padding: 6px 4px 2px 4px; border-top: 1px solid #333333;")
         self.content_layout.addWidget(header)
@@ -521,7 +522,8 @@ class InspectorPanel(QWidget):
         self.content_layout.addWidget(form_widget)
 
     def add_box_collider_editor(self, data, obj):
-        if data is None: data = {}
+        if data is None:
+            data = {}
         header = QLabel("BoxCollider")
         header.setStyleSheet("font-weight: bold; color: #777777; padding: 6px 4px 2px 4px; border-top: 1px solid #333333;")
         self.content_layout.addWidget(header)

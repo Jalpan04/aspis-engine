@@ -1,11 +1,10 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, 
+    QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem,
     QPushButton, QHBoxLayout
 )
 from PySide6.QtCore import Qt
 from editor.editor_state import EditorState
 from shared.scene_schema import GameObject
-from dataclasses import asdict
 
 class HierarchyPanel(QWidget):
     def __init__(self):

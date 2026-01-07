@@ -1,4 +1,4 @@
-from runtime.api import Script, Time
+from runtime.api import Script
 import random
 
 class Ball(Script):

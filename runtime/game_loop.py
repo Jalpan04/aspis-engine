@@ -1,7 +1,6 @@
 import pygame
 import sys
 import os
-import json
 import importlib.util
 import inspect
 
@@ -9,11 +8,9 @@ import inspect
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(PROJECT_ROOT)
 
-from shared.scene_schema import Scene
-from shared.scene_loader import load_scene
-from runtime.api import GameObject, Script, Input, Time
-
-from runtime.physics import PhysicsSystem
+from shared.scene_loader import load_scene  # noqa: E402
+from runtime.api import GameObject, Script, Input, Time  # noqa: E402
+from runtime.physics import PhysicsSystem  # noqa: E402
 
 class GameRuntime:
     def __init__(self, scene_path, width=800, height=600):
@@ -61,13 +58,6 @@ class GameRuntime:
                         script.on_collision_enter(other)
                     except Exception as e:
                         print(f"Error in on_collision_enter for {script}: {e}")
-
-    def update_scripts(self, dt):
-        for script in self.active_scripts:
-            try:
-                script.update(dt)
-            except Exception as e:
-                print(f"Error in Update() of {script}: {e}")
 
     def load_script(self, script_path, game_object):
         """Dynamically load a script file and instantiate its Script class."""
@@ -280,7 +270,7 @@ if __name__ == "__main__":
         try:
             game = GameRuntime(scene_file)
             game.run()
-        except Exception as e:
+        except Exception:
             import traceback
             traceback.print_exc()
             print("\nCRITICAL ERROR: Runtime crashed.")

@@ -1,7 +1,7 @@
 import sys
 import os
 import subprocess
-from PySide6.QtWidgets import QApplication, QMainWindow, QDockWidget, QMenu, QMenuBar, QFileDialog, QMessageBox
+from PySide6.QtWidgets import QApplication, QMainWindow, QDockWidget, QFileDialog, QMessageBox
 from PySide6.QtCore import Qt
 
 # Ensure correct path

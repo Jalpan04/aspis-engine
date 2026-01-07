@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QPixmap, QCursor, QPolygonF
+from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QPixmap
 from PySide6.QtCore import Qt, QRectF, QPointF
 from editor.editor_state import EditorState
 import os
@@ -46,12 +46,10 @@ class SceneCanvas(QWidget):
         self.handle_size = 10
 
     def get_canvas_center(self):
-        cx = (self.width() / 2 - self.pan_offset.x()) / self.zoom - (self.width() / 2 / self.zoom)
-        cy = (self.height() / 2 - self.pan_offset.y()) / self.zoom - (self.height() / 2 / self.zoom)
         # Simplified:
         # Screen Center = (W/2, H/2)
         # World Center = screen_to_world(W/2, H/2)
-        return self.screen_to_world(self.width()/2, self.height()/2)
+        return self.screen_to_world(self.width() / 2, self.height() / 2)
 
     def screen_to_world(self, sx, sy):
         # Inverse of: Screen = World * Zoom + Pan + CenterOffset
@@ -347,8 +345,9 @@ class SceneCanvas(QWidget):
 
         if self.active_handle != self.HANDLE_NONE and self.state.selected_object_id:
             obj = self.state.get_selected_object()
-            if not obj: return
-            
+            if not obj:
+                return
+
             wx, wy = self.screen_to_world(pos.x(), pos.y())
             transform = obj["components"]["Transform"]
             
@@ -416,10 +415,12 @@ class SceneCanvas(QWidget):
 
     def hit_test(self, wx, wy):
         scene = self.state.current_scene
-        if not scene: return None
+        if not scene:
+            return None
         for obj in reversed(scene.objects):
-            if not obj.get("active", True): continue
-            
+            if not obj.get("active", True):
+                continue
+
             cx, cy, w, h, rotation = self.get_obj_geometry(obj)
             
             # Hit test in local space
@@ -456,7 +457,6 @@ class SceneCanvas(QWidget):
 
     def instantiate_prefab(self, path, drop_pos):
         import json
-        from shared.scene_schema import GameObject
         
         try:
             with open(path, 'r') as f:

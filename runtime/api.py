@@ -1,5 +1,4 @@
 
-import pygame
 
 class Input:
     """Static helper for input."""

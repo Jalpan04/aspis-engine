@@ -1,13 +1,12 @@
 import sys
 import os
-import json
-from dataclasses import asdict
+# from dataclasses import asdict # No longer needed
 
 # Ensure we can import from shared
 sys.path.append(os.getcwd())
 
 from shared.scene_schema import Scene, GameObject
-from shared.component_defs import SpriteRenderer, Script
+from shared.component_defs import SpriteRenderer
 from shared.scene_loader import save_scene, load_scene
 from shared.validation import validate_scene
 
@@ -24,11 +23,13 @@ def run_manual_test():
     hero = GameObject.create("Hero")
     # We point to a file that doesn't exist yet to test validation later, 
     # but for now we just want to test structure saving.
-    hero.components["SpriteRenderer"] = asdict(SpriteRenderer(sprite_path="assets/sprites/hero_test.png"))
+    # REPLACED asdict with model_dump
+    hero.components["SpriteRenderer"] = SpriteRenderer(sprite_path="assets/sprites/hero_test.png").model_dump()
     scene.add_object(hero)
     
     save_path = "scenes/manual_test.scene.json"
-    save_scene(asdict(scene), save_path)
+    # REPLACED asdict with model_dump
+    save_scene(scene.model_dump(), save_path)
     print(f"-> Scene saved to: {save_path}")
     
     # 2. LOAD TEST
