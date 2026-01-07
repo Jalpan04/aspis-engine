@@ -1,0 +1,20 @@
+pygame-ce 2.5.6 (SDL 2.32.10, Python 3.13.5)
+ModernGL: 330
+GPU: Intel(R) UHD Graphics 770
+Setting up Test Scene...
+Traceback (most recent call last):
+  File "D:\python projects\gameengine\main.py", line 123, in <module>
+    main()
+    ~~~~^^
+  File "D:\python projects\gameengine\main.py", line 102, in main
+    app.setup()
+    ~~~~~~~~~^^
+  File "D:\python projects\gameengine\main.py", line 20, in setup
+    Transform(x=0, y=100, scale=1.0),
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\acer\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\main.py", line 253, in __init__
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+pydantic_core._pydantic_core.ValidationError: 1 validation error for Transform
+scale
+  Input should be a valid tuple [type=tuple_type, input_value=1.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.11/v/tuple_type

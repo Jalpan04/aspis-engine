@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+build/
+dist/
+*.egg-info/
+.env
+.venv/
+env/
+venv/
+*.jpg
+*.png
+*.scene.json.backup
+*.prefab.backup
