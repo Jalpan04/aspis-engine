@@ -8,7 +8,9 @@ class GameObject:
     id: str
     name: str
     active: bool = True
+    parent: Optional[str] = None
     components: Dict[str, Any] = field(default_factory=dict)
+
 
     @staticmethod
     def create(name: str = "New Object") -> 'GameObject':
@@ -18,6 +20,7 @@ class GameObject:
         return GameObject(
             id=obj_id,
             name=name,
+            parent=None,
             components={"Transform": asdict(transform)}
         )
 
@@ -26,6 +29,7 @@ class Scene:
     metadata: Dict[str, Any] = field(default_factory=dict)
     objects: List[Dict[str, Any]] = field(default_factory=list) # Stored as dicts for JSON
     prefabs: Dict[str, Any] = field(default_factory=dict)
+    settings: Dict[str, Any] = field(default_factory=lambda: {"background_color": [20, 20, 20, 255]})
 
     @staticmethod
     def create_empty(name: str = "New Scene") -> 'Scene':
@@ -37,7 +41,8 @@ class Scene:
         return Scene(
             metadata={"name": name, "version": 1},
             objects=[asdict(cam)],
-            prefabs={}
+            prefabs={},
+            settings={"background_color": [20, 20, 20, 255]}
         )
 
     def add_object(self, obj: GameObject):

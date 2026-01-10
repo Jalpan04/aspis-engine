@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QScrollArea, QFrame, 
-    QFormLayout, QLineEdit, QHBoxLayout, QPushButton, QFileDialog, QCheckBox
+    QFormLayout, QLineEdit, QHBoxLayout, QPushButton, QFileDialog, QCheckBox, QMenu
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDoubleValidator
@@ -14,9 +14,11 @@ class FloatField(QLineEdit):
     value_edited = Signal(float)      # Live updates (preview)
     value_committed = Signal(float, float)   # Final update (new, old)
     
-    def __init__(self, value=0.0):
+    def __init__(self, value=0.0, min_val=None, max_val=None):
         super().__init__()
         self.setValidator(QDoubleValidator())
+        self.min_val = min_val
+        self.max_val = max_val
         self.setFixedWidth(60)
         self.setStyleSheet("""
             QLineEdit {
@@ -34,7 +36,25 @@ class FloatField(QLineEdit):
         self.textChanged.connect(self._on_text_changed)
         self.editingFinished.connect(self._on_editing_finished)
         self._last_committed_value = value
+        
+        # Context Menu
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
     
+    def show_context_menu(self, pos):
+        from PySide6.QtWidgets import QMenu, QApplication
+        menu = QMenu(self)
+        reset_action = menu.addAction("Reset to 0")
+        reset_action.triggered.connect(lambda: self._force_commit(0.0))
+        
+        # Copy/Paste support could be added here
+        
+        menu.exec(self.mapToGlobal(pos))
+        
+    def _force_commit(self, val):
+        self.set_value(val)
+        self._on_editing_finished() # Trigger commit signal
+
     def _on_text_changed(self, text):
         try:
             val = float(text)
@@ -45,6 +65,15 @@ class FloatField(QLineEdit):
     def _on_editing_finished(self):
         try:
             val = float(self.text())
+            
+            # Validation
+            if self.min_val is not None: val = max(self.min_val, val)
+            if self.max_val is not None: val = min(self.max_val, val)
+            
+            # Update text if clamped
+            if val != float(self.text()):
+                self.set_value(val)
+                
             if val != self._last_committed_value:
                 old_val = self._last_committed_value
                 self._last_committed_value = val
@@ -107,6 +136,14 @@ class Vec2Field(QWidget):
             self.value_edited.emit(x, y)
         except ValueError:
             pass
+
+    def set_value(self, value):
+        self.blockSignals(True)
+        self.x_field.setText(f"{value[0]:.2f}")
+        self.y_edit = self.y_field # ensure we access the field correctly
+        self.y_field.setText(f"{value[1]:.2f}")
+        self.last_x, self.last_y = value
+        self.blockSignals(False)
 
     def _emit_commit(self):
         if self.block_updates: return
@@ -349,14 +386,215 @@ class InspectorPanel(QWidget):
                 self.add_camera_editor(comp_data, obj)
             elif comp_name == "LightSource":
                 self.add_light_source_editor(comp_data, obj)
+            elif comp_name == "Background":
+                self.add_background_editor(comp_data, obj)
 
+        # Determine available components
+        available = []
+        all_components = [
+            "Transform", "SpriteRenderer", "Script", "RigidBody", 
+            "BoxCollider", "CircleCollider", "Camera", "LightSource", "Background", "TextRenderer"
+        ]
+        
+        for c in all_components:
+            if c not in components:
+                available.append(c)
+        
+        if not available:
+            return
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.setContentsMargins(4, 8, 4, 4)
+        
+        add_btn = QPushButton("+ Add Component")
+        add_btn.setFixedHeight(22)
+        add_btn.clicked.connect(lambda: self.show_add_menu(obj, available, add_btn))
+        btn_layout.addWidget(add_btn)
+        btn_layout.addStretch()
+        
+        btn_widget = QWidget()
+        btn_widget.setLayout(btn_layout)
+        self.content_layout.addWidget(btn_widget)
+
+    def add_camera_editor(self, data, obj):
+        if data is None: data = {}
+        self.content_layout.addWidget(self.create_header("Camera", obj, "Camera"))
+
+        form = QFormLayout()
+        form.setContentsMargins(8, 4, 4, 4)
+        form.setSpacing(2)
+        form.setLabelAlignment(Qt.AlignRight)
+        
+        # Size
+        width = data.get("width", 800.0)
+        height = data.get("height", 600.0)
+        size_field = Vec2Field(width, height, labels=("W", "H"))
+        size_field.value_edited.connect(lambda w, h: [self.preview_component(obj, "Camera", "width", w), self.preview_component(obj, "Camera", "height", h)])
+        size_field.value_committed.connect(lambda w, h: [self.update_component(obj, "Camera", "width", w), self.update_component(obj, "Camera", "height", h)])
+        form.addRow(QLabel("Size:"), size_field)
+
+        # Zoom
+        zoom = data.get("zoom", 1.0)
+        zoom_field = FloatField(zoom)
+        zoom_field.value_edited.connect(lambda v: self.preview_component(obj, "Camera", "zoom", v))
+        zoom_field.value_committed.connect(lambda v: self.update_component(obj, "Camera", "zoom", v))
+        form.addRow(QLabel("Zoom:"), zoom_field)
+        
+        # Is Main
+        is_main = data.get("is_main", True)
+        main_check = QCheckBox()
+        main_check.setChecked(is_main)
+        main_check.stateChanged.connect(lambda s: self.update_component(obj, "Camera", "is_main", s == 2))
+        form.addRow(QLabel("Main Camera:"), main_check)
+
+        form_widget = QWidget()
+        form_widget.setLayout(form)
+        self.content_layout.addWidget(form_widget)
+
+    def add_background_editor(self, data, obj):
+        if data is None: data = {}
+        self.content_layout.addWidget(self.create_header("Background", obj, "Background"))
+
+        form = QFormLayout()
+        form.setContentsMargins(8, 4, 4, 4)
+        form.setSpacing(2)
+        form.setLabelAlignment(Qt.AlignRight)
+
+        # Sprite
+        path_row = QHBoxLayout()
+        current_path = data.get("sprite_path", "")
+        path_label = QLabel(os.path.basename(current_path) if current_path else "(none)")
+        path_label.setStyleSheet("color: #999999; font-size: 10px;")
+        browse_btn = QPushButton("...")
+        browse_btn.setFixedSize(24, 18)
+        browse_btn.clicked.connect(lambda: self.pick_image_generic(obj, "Background", "sprite_path", path_label))
+        
+        path_row.addWidget(path_label)
+        path_row.addWidget(browse_btn)
+        form.addRow(QLabel("Image:"), path_row)
+
+        # Color
+        color = data.get("color", [255, 255, 255, 255])
+        col_field = ColorField(tuple(color))
+        col_field.value_changed.connect(lambda c: self.update_component(obj, "Background", "color", c))
+        form.addRow(QLabel("Color:"), col_field)
+        
+        # Fixed
+        fixed = data.get("fixed", True)
+        fixed_check = QCheckBox()
+        fixed_check.setChecked(fixed)
+        fixed_check.stateChanged.connect(lambda s: self.update_component(obj, "Background", "fixed", s == 2))
+        form.addRow(QLabel("Fixed (Camera):"), fixed_check)
+        
+        # Layer
+        layer = data.get("layer", -100)
+        layer_field = FloatField(layer)
+        layer_field.value_committed.connect(lambda v: self.update_component(obj, "Background", "layer", int(v)))
+        form.addRow(QLabel("Layer:"), layer_field)
+
+        form_widget = QWidget()
+        form_widget.setLayout(form)
+        self.content_layout.addWidget(form_widget)
+    
+    def pick_image_generic(self, obj, comp_name, key, label_widget):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Image", 
+            os.path.join(self.state.project_root, "assets", "sprites"),
+            "Images (*.png *.jpg *.jpeg *.bmp)"
+        )
+        if path:
+            import shutil
+            try:
+                rel_path = os.path.relpath(path, self.state.project_root)
+                if rel_path.startswith("..") or os.path.isabs(rel_path): raise ValueError()
+            except ValueError:
+                dest_dir = os.path.join(self.state.project_root, "assets", "sprites")
+                os.makedirs(dest_dir, exist_ok=True)
+                filename = os.path.basename(path)
+                dest_path = os.path.join(dest_dir, filename)
+                shutil.copy2(path, dest_path)
+                rel_path = os.path.relpath(dest_path, self.state.project_root)
+            
+            if comp_name not in obj.get("components", {}): obj["components"][comp_name] = {}
+            obj["components"][comp_name][key] = rel_path
+            label_widget.setText(os.path.basename(rel_path))
+            self.state.scene_loaded.emit()
+        browse_btn.clicked.connect(lambda: self.pick_image_generic(obj, "Background", "sprite_path", path_label))
+        
+        path_row.addWidget(path_label)
+        path_row.addWidget(browse_btn)
+        form.addRow(QLabel("Image:"), path_row)
+
+        # Color
+        color = data.get("color", [255, 255, 255, 255])
+        col_field = ColorField(tuple(color))
+        col_field.value_changed.connect(lambda c: self.update_component(obj, "Background", "color", c))
+        form.addRow(QLabel("Color:"), col_field)
+        
+        # Fixed
+        fixed = data.get("fixed", True)
+        fixed_check = QCheckBox()
+        fixed_check.setChecked(fixed)
+        fixed_check.stateChanged.connect(lambda s: self.update_component(obj, "Background", "fixed", s == 2))
+        form.addRow(QLabel("Fixed (Camera):"), fixed_check)
+        
+        # Layer
+        layer = data.get("layer", -100)
+        layer_field = FloatField(layer)
+        layer_field.value_committed.connect(lambda v: self.update_component(obj, "Background", "layer", int(v)))
+        form.addRow(QLabel("Layer:"), layer_field)
+
+        form_widget = QWidget()
+        form_widget.setLayout(form)
+        self.content_layout.addWidget(form_widget)
+    
+    def pick_image_generic(self, obj, comp_name, key, label_widget):
+        current_val = obj.get("components", {}).get(comp_name, {}).get(key, "")
+        
+        if current_val:
+            # Show Options
+            menu = QMenu(self)
+            replace_action = menu.addAction("Replace")
+            delete_action = menu.addAction("Delete")
+            
+            # Position menu at mouse cursor or button?
+            # We don't have button reference easily, use cursor
+            from PySide6.QtGui import QCursor
+            action = menu.exec(QCursor.pos())
+            
+            if action == delete_action:
+                if comp_name in obj.get("components", {}):
+                     obj["components"][comp_name][key] = ""
+                label_widget.setText("None")
+                self.state.scene_loaded.emit()
+                return
+            elif action == replace_action:
+                pass # Proceed to picker
             else:
-                self.add_component_section(comp_name, comp_data, obj)
-
-        # Add Component button
-        self.add_component_button(obj)
-
-        self.content_layout.addStretch()
+                return # Cancelled
+        
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Image", 
+            os.path.join(self.state.project_root, "assets", "sprites"),
+            "Images (*.png *.jpg *.jpeg *.bmp)"
+        )
+        if path:
+            import shutil
+            try:
+                rel_path = os.path.relpath(path, self.state.project_root)
+                if rel_path.startswith("..") or os.path.isabs(rel_path): raise ValueError()
+            except ValueError:
+                dest_dir = os.path.join(self.state.project_root, "assets", "sprites")
+                os.makedirs(dest_dir, exist_ok=True)
+                filename = os.path.basename(path)
+                dest_path = os.path.join(dest_dir, filename)
+                shutil.copy2(path, dest_path)
+                rel_path = os.path.relpath(dest_path, self.state.project_root)
+            
+            if comp_name not in obj.get("components", {}): obj["components"][comp_name] = {}
+            obj["components"][comp_name][key] = rel_path
+            label_widget.setText(os.path.basename(rel_path))
+            self.state.scene_loaded.emit()
 
     def add_transform_editor(self, data, obj):
         self.content_layout.addWidget(self.create_header("Transform", obj, "Transform"))
@@ -453,8 +691,9 @@ class InspectorPanel(QWidget):
         path_label.setFixedWidth(100)
         
         browse_btn = QPushButton("...")
-        browse_btn.setFixedWidth(24)
-        browse_btn.clicked.connect(lambda: self.pick_sprite(obj, path_label))
+        browse_btn.setFixedSize(24, 18)
+        # Use generic picker
+        browse_btn.clicked.connect(lambda: self.pick_image_generic(obj, "SpriteRenderer", "sprite_path", path_label))
         
         path_row.addWidget(path_label)
         path_row.addWidget(browse_btn)
@@ -497,41 +736,6 @@ class InspectorPanel(QWidget):
         form_widget = QWidget()
         form_widget.setLayout(form)
         self.content_layout.addWidget(form_widget)
-
-    def pick_sprite(self, obj, label_widget):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select Sprite", 
-            os.path.join(self.state.project_root, "assets", "sprites"),
-            "Images (*.png *.jpg *.jpeg *.bmp)"
-        )
-        if path:
-            # Check if file is inside project
-            try:
-                rel_path = os.path.relpath(path, self.state.project_root)
-                # Check if it escapes the project (starts with ..)
-                if rel_path.startswith("..") or os.path.isabs(rel_path):
-                    raise ValueError("Outside project")
-            except ValueError:
-                # File is outside project - copy it to assets/sprites
-                import shutil
-                dest_dir = os.path.join(self.state.project_root, "assets", "sprites")
-                os.makedirs(dest_dir, exist_ok=True)
-                
-                filename = os.path.basename(path)
-                dest_path = os.path.join(dest_dir, filename)
-                
-                # Handle duplicates
-                counter = 1
-                base, ext = os.path.splitext(filename)
-                while os.path.exists(dest_path):
-                    dest_path = os.path.join(dest_dir, f"{base}_{counter}{ext}")
-                    counter += 1
-                
-                shutil.copy2(path, dest_path)
-                rel_path = os.path.relpath(dest_path, self.state.project_root)
-            
-            self.update_sprite(obj, "sprite_path", rel_path)
-            label_widget.setText(os.path.basename(rel_path))
 
     def update_sprite(self, obj, key, value):
         if "SpriteRenderer" not in obj.get("components", {}):
@@ -738,7 +942,7 @@ class InspectorPanel(QWidget):
 
         # Mass
         mass = data.get("mass", 1.0)
-        mass_field = FloatField(mass)
+        mass_field = FloatField(mass, min_val=0.001) # Prevent zero mass
         mass_field.value_edited.connect(lambda v: self.preview_component(obj, "RigidBody", "mass", v))
         mass_field.value_committed.connect(lambda v: self.update_component(obj, "RigidBody", "mass", v))
         
@@ -749,7 +953,7 @@ class InspectorPanel(QWidget):
 
         # Drag
         drag = data.get("drag", 0.0)
-        drag_field = FloatField(drag)
+        drag_field = FloatField(drag, min_val=0.0)
         drag_field.value_edited.connect(lambda v: self.preview_component(obj, "RigidBody", "drag", v))
         drag_field.value_committed.connect(lambda v: self.update_component(obj, "RigidBody", "drag", v))
         
@@ -937,11 +1141,65 @@ class InspectorPanel(QWidget):
         trigger_check.stateChanged.connect(lambda s: self.update_component(obj, "CircleCollider", "is_trigger", s == 2))
         form.addRow(QLabel("Is Trigger:"), trigger_check)
 
+        # Category
+        cat = data.get("category_bitmask", 1)
+        cat_field = FloatField(cat) # Using FloatField as IntField for simplicity MVP
+        cat_field.value_committed.connect(lambda v: self.update_component(obj, "CircleCollider", "category_bitmask", int(v)))
+        form.addRow(QLabel("Category (Bitmask):"), cat_field)
+
+        # Mask
+        mask = data.get("collision_mask", 0xFFFFFFFF)
+        mask_field = FloatField(mask)
+        mask_field.value_committed.connect(lambda v: self.update_component(obj, "CircleCollider", "collision_mask", int(v)))
+        form.addRow(QLabel("Mask (Bitmask):"), mask_field)
+
         form_widget = QWidget()
         form_widget.setLayout(form)
         self.content_layout.addWidget(form_widget)
 
-    def add_light_source_editor(self, data, obj):
+    def add_box_collider_editor(self, data, obj):
+        if data is None: data = {}
+        self.content_layout.addWidget(self.create_header("BoxCollider", obj, "BoxCollider"))
+
+        form = QFormLayout()
+        form.setContentsMargins(8, 4, 4, 4)
+        form.setSpacing(2)
+        form.setLabelAlignment(Qt.AlignRight)
+
+        # Size
+        size = data.get("size", [50.0, 50.0])
+        size_field = Vec2Field(size[0], size[1], labels=("W", "H"))
+        size_field.value_committed.connect(lambda w, h, ow, oh: self.update_component(obj, "BoxCollider", "size", [w, h]))
+        form.addRow(QLabel("Size:"), size_field)
+
+        # Offset
+        offset = data.get("offset", [0.0, 0.0])
+        offset_field = Vec2Field(offset[0], offset[1])
+        offset_field.value_committed.connect(lambda x, y, ox, oy: self.update_component(obj, "BoxCollider", "offset", [x, y]))
+        form.addRow(QLabel("Offset:"), offset_field)
+
+        # Is Trigger
+        is_trigger = data.get("is_trigger", False)
+        trigger_check = QCheckBox()
+        trigger_check.setChecked(is_trigger)
+        trigger_check.stateChanged.connect(lambda s: self.update_component(obj, "BoxCollider", "is_trigger", s == 2))
+        form.addRow(QLabel("Is Trigger:"), trigger_check)
+        
+        # Category
+        cat = data.get("category_bitmask", 1)
+        cat_field = FloatField(cat) 
+        cat_field.value_committed.connect(lambda v: self.update_component(obj, "BoxCollider", "category_bitmask", int(v)))
+        form.addRow(QLabel("Category (Bitmask):"), cat_field)
+
+        # Mask
+        mask = data.get("collision_mask", 0xFFFFFFFF)
+        mask_field = FloatField(mask)
+        mask_field.value_committed.connect(lambda v: self.update_component(obj, "BoxCollider", "collision_mask", int(v)))
+        form.addRow(QLabel("Mask (Bitmask):"), mask_field)
+
+        form_widget = QWidget()
+        form_widget.setLayout(form)
+        self.content_layout.addWidget(form_widget)
         if data is None: data = {}
         self.content_layout.addWidget(self.create_header("LightSource", obj, "LightSource"))
 

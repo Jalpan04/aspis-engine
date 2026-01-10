@@ -5,7 +5,7 @@
   },
   "objects": [
     {
-      "id": "7247f255-4c24-4c71-9042-5b2e9c7aeaee",
+      "id": "c8a78dfb-8ff3-4353-b680-efb862bc4d03",
       "name": "Main Camera",
       "active": true,
       "components": {
@@ -16,8 +16,8 @@
           ],
           "rotation": 0.0,
           "scale": [
-            2.3827237067636977,
-            2.3827237067636977
+            1.0,
+            1.0
           ]
         },
         "Camera": {
@@ -25,34 +25,33 @@
           "height": 720,
           "zoom": 1.0,
           "is_main": true
-        },
-        "SpriteRenderer": {
-          "sprite_path": "",
-          "layer": 0,
-          "visible": true,
-          "tint": [
-            255,
-            255,
-            255,
-            239
-          ]
         }
       }
     },
     {
-      "id": "c004a5dd-bd95-43a3-8136-9661eb971e58",
+      "id": "e09eec42-801b-412d-974f-e274b039919a",
       "name": "GameObject",
       "active": true,
       "components": {
         "Transform": {
           "position": [
-            6.666666666666629,
-            4.0
+            0.0,
+            0.0
           ],
-          "rotation": 45.0,
+          "rotation": 0.0,
           "scale": [
-            5.099709669473453,
-            5.099709669473453
+            2.3671383928541827,
+            2.3671383928541827
+          ]
+        },
+        "RigidBody": {
+          "mass": 1.0,
+          "drag": 0.0,
+          "use_gravity": true,
+          "restitution": 0.5,
+          "velocity": [
+            0.0,
+            0.0
           ]
         },
         "SpriteRenderer": {
@@ -60,9 +59,9 @@
           "layer": 0,
           "visible": true,
           "tint": [
-            247,
-            247,
-            247,
+            255,
+            176,
+            0,
             255
           ]
         }

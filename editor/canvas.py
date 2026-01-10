@@ -119,8 +119,16 @@ class SceneCanvas(QWidget):
         
         scene = self.state.current_scene
         if scene:
-            sorted_objs = sorted(scene.objects, key=lambda o: 
-                o.get("components", {}).get("SpriteRenderer", {}).get("layer", 0))
+            # Sort by layer: Background (-100), Sprite (0), Text (100)
+            def get_layer(o):
+                bg = o.get("components", {}).get("Background")
+                if bg: return bg.get("layer", -100)
+                sr = o.get("components", {}).get("SpriteRenderer")
+                if sr: return sr.get("layer", 0)
+                return 0
+            
+            sorted_objs = sorted(scene.objects, key=get_layer)
+            
             for obj in sorted_objs:
                 self.draw_object(painter, obj)
 
@@ -168,6 +176,68 @@ class SceneCanvas(QWidget):
         scale = transform.get("scale", [1, 1])
         rotation = transform.get("rotation", 0)
         
+        # --- Background Drawing ---
+        bg_data = obj.get("components", {}).get("Background")
+        if bg_data:
+            painter.save()
+            
+            is_fixed = bg_data.get("fixed", True)
+            target_rect = QRectF(0, 0, self.width(), self.height()) # Default full screen for fixed
+
+            # If Fixed, reset transform to draw in screen space
+            if is_fixed:
+                painter.resetTransform()
+                # Draw at (0,0) with size (width, height)
+                pass 
+            else:
+                # World Space (Standard)
+                painter.translate(pos[0], pos[1])
+                painter.rotate(rotation)
+                # Use base size logic later
+
+            # Draw Image or Rect
+            path = bg_data.get("sprite_path")
+            pixmap = self.load_sprite(path) if path else None
+            
+            color = bg_data.get("color", [255, 255, 255, 255])
+            if len(color) == 3: color.append(255)
+            
+            if pixmap and not pixmap.isNull():
+                if is_fixed:
+                     target_rect = QRectF(0, 0, self.width(), self.height())
+                else:
+                     w = pixmap.width() * scale[0]
+                     h = pixmap.height() * scale[1]
+                     target_rect = QRectF(-w/2, -h/2, w, h)
+                
+                # Tint? QPainter weak support. 
+                painter.drawPixmap(target_rect, pixmap, QRectF(pixmap.rect()))
+                
+                # Tint overlay
+                if color[:3] != [255, 255, 255]:
+                    painter.setCompositionMode(QPainter.CompositionMode_Multiply)
+                    painter.fillRect(target_rect, QColor(*color))
+            else:
+                # Draw Color Rect
+                if is_fixed:
+                    target_rect = QRectF(0, 0, self.width(), self.height())
+                    painter.setPen(Qt.NoPen)
+                    painter.setBrush(QColor(*color))
+                    painter.drawRect(target_rect)
+                else:
+                    base_s = 100
+                    w = base_s * scale[0]
+                    h = base_s * scale[1]
+                    target_rect = QRectF(-w/2, -h/2, w, h)
+                    painter.setPen(Qt.NoPen)
+                    painter.setBrush(QColor(*color))
+                    painter.drawRect(target_rect)
+            
+            painter.restore()
+            return # Skip SpriteRenderer if Background exists to avoid double draw? Or allow both?
+                 # If both exist, allow both? But usually mutually exclusive component usage.
+                 # Let's verify if SpriteRenderer is also there.
+        
         if not sprite_data.get("visible", True):
             return
         
@@ -194,22 +264,47 @@ class SceneCanvas(QWidget):
         # Draw Sprite/Box
         if pixmap and not pixmap.isNull():
             target_rect = QRectF(-w/2, -h/2, w, h)
-            painter.drawPixmap(target_rect, pixmap, QRectF(pixmap.rect()))
-            # Debug: Draw border around sprite to see if it's there
-            # painter.setPen(QColor(255, 0, 255))
-            # painter.setBrush(Qt.NoBrush)
-            # painter.drawRect(target_rect)
-        else:
-            if is_selected:
-                painter.setBrush(QBrush(QColor(70, 70, 90)))
-                painter.setPen(QPen(QColor(100, 120, 160), 1/self.zoom))
-            else:
-                painter.setBrush(QBrush(QColor(50, 50, 50)))
-                painter.setPen(QPen(QColor(70, 70, 70), 1/self.zoom))
-            painter.drawRect(QRectF(-w/2, -h/2, w, h))
             
-            painter.setFont(QFont("Segoe UI", 8))
-            painter.drawText(QRectF(-w/2, -h/2, w, h), Qt.AlignCenter, obj.get("name", "?")[:8])
+            # Simple tinting only if no sprite logic or separate shader
+            # For MVP, we just draw the pixmap. Full tinting is expensive in QPainter per frame without caching.
+            # But let's check if we can simply multiply color
+            painter.drawPixmap(target_rect, pixmap, QRectF(pixmap.rect()))
+        else:
+            # Fallback Shapes (Square/Circle)
+            
+            # Get Tint Color
+            tint = sprite_data.get("tint", [255, 255, 255, 255])
+            if len(tint) == 3: tint.append(255)
+            color = QColor(*tint)
+            
+            brush = QBrush(color)
+            
+            # Selection Style (Overlay)
+            if is_selected:
+                pen = QPen(QColor(100, 180, 255), 2/self.zoom)
+            else:
+                pen = QPen(QColor(50, 50, 50, 150), 1/self.zoom)
+            
+            painter.setBrush(brush)
+            painter.setPen(pen)
+            
+            # Draw Circle if CircleCollider exists
+            if "CircleCollider" in obj.get("components", {}):
+                # Assume diameter matches width/height derived from scale (usually 50 base)
+                # Or use collider radius? Visuals usually driven by Transform.
+                painter.drawEllipse(QRectF(-w/2, -h/2, w, h))
+            else:
+                # Default Square
+                painter.drawRect(QRectF(-w/2, -h/2, w, h))
+            
+            # Name Tag
+            if is_selected:
+                painter.setPen(QPen(Qt.white))
+            else:
+                painter.setPen(QPen(Qt.lightGray))
+                
+            painter.setFont(QFont("Segoe UI", 10))
+            painter.drawText(QRectF(-w/2, -h/2, w, h), Qt.AlignCenter, obj.get("name", "?")[:10])
 
         # Draw Camera Gizmo
         camera_data = obj.get("components", {}).get("Camera")
@@ -370,14 +465,26 @@ class SceneCanvas(QWidget):
             wx, wy = self.screen_to_world(pos.x(), pos.y())
             transform = obj["components"]["Transform"]
             
+
             if self.active_handle == self.HANDLE_MOVE:
                 dx = wx - self.drag_start.x()
                 dy = wy - self.drag_start.y()
-                # Simple translation works regardless of rotation
-                transform["position"] = [
-                    self.drag_obj_start_pos[0] + dx, 
-                    self.drag_obj_start_pos[1] + dy
-                ]
+                
+                new_pos_x = self.drag_obj_start_pos[0] + dx
+                new_pos_y = self.drag_obj_start_pos[1] + dy
+                
+                # Snapping (Hold Ctrl)
+                if event.modifiers() & Qt.ControlModifier:
+                    snap = self.grid_size
+                    new_pos_x = round(new_pos_x / snap) * snap
+                    new_pos_y = round(new_pos_y / snap) * snap
+                
+                new_pos = [new_pos_x, new_pos_y]
+                
+                # Push Command (will merge with previous move command)
+                cmd = ChangeComponentCommand(obj, "Transform", "position", new_pos)
+                self.state.undo_stack.push(cmd)
+                cmd.redo() # Ensure visual update
             
             elif self.active_handle in (self.HANDLE_SCALE_TL, self.HANDLE_SCALE_TR, 
                                         self.HANDLE_SCALE_BL, self.HANDLE_SCALE_BR):
@@ -391,59 +498,50 @@ class SceneCanvas(QWidget):
                 
                 if dist_start > 0.001:
                     factor = dist_now / dist_start
-                    # Clamp factor to avoid crazy values
                     factor = max(0.01, min(100.0, factor))
+                    
+                    # Snapping Scale? Maybe 0.1 increments?
+                    if event.modifiers() & Qt.ControlModifier:
+                        factor = round(factor * 10) / 10.0
                     
                     nsx = self.drag_scale_start[0] * factor
                     nsy = self.drag_scale_start[1] * factor
                     
-                    # Hard limit on scale to prevent floating point explosion
                     nsx = max(0.01, min(1000.0, nsx))
                     nsy = max(0.01, min(1000.0, nsy))
                     
-                    transform["scale"] = [nsx, nsy]
+                    cmd = ChangeComponentCommand(obj, "Transform", "scale", [nsx, nsy])
+                    self.state.undo_stack.push(cmd)
+                    cmd.redo()
 
             elif self.active_handle == self.HANDLE_ROTATE:
                 cx, cy = self.drag_obj_start_pos
                 angle_start = math.atan2(self.drag_start.y() - cy, self.drag_start.x() - cx)
                 angle_now = math.atan2(wy - cy, wx - cx)
                 delta_deg = math.degrees(angle_now - angle_start)
-                transform["rotation"] = (self.drag_rot_start + delta_deg) % 360
+                
+                raw_rot = (self.drag_rot_start + delta_deg)
+                
+                # Angle Snapping (15 degrees)
+                if event.modifiers() & Qt.ControlModifier:
+                    snap_angle = 15.0
+                    raw_rot = round(raw_rot / snap_angle) * snap_angle
+                
+                new_rot = raw_rot % 360
+                
+                cmd = ChangeComponentCommand(obj, "Transform", "rotation", new_rot)
+                self.state.undo_stack.push(cmd)
+                cmd.redo()
             
             self.state.scene_loaded.emit()
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
             
-            # Check if we were dragging/transforming
-            if self.active_handle != self.HANDLE_NONE and self.state.selected_object_id:
-                obj = self.state.get_selected_object()
-                if obj and "Transform" in obj.get("components", {}):
-                    transform = obj["components"]["Transform"]
-                    
-                    if self.active_handle == self.HANDLE_MOVE:
-                        current_pos = transform.get("position", [0, 0])
-                        start_pos = self.drag_obj_start_pos
-                        if current_pos != start_pos:
-                            cmd = ChangeComponentCommand(obj, "Transform", "position", list(current_pos))
-                            cmd.old_value = list(start_pos)
-                            self.state.undo_stack.push(cmd)
-                            
-                    elif self.active_handle == self.HANDLE_ROTATE:
-                        current_rot = transform.get("rotation", 0)
-                        start_rot = self.drag_rot_start
-                        if current_rot != start_rot:
-                            cmd = ChangeComponentCommand(obj, "Transform", "rotation", current_rot)
-                            cmd.old_value = start_rot
-                            self.state.undo_stack.push(cmd)
-                            
-                    else: # Scale handles
-                        current_scale = transform.get("scale", [1, 1])
-                        start_scale = self.drag_scale_start
-                        if current_scale != start_scale:
-                            cmd = ChangeComponentCommand(obj, "Transform", "scale", list(current_scale))
-                            cmd.old_value = list(start_scale)
-                            self.state.undo_stack.push(cmd)
+            # Note: We handled undo commands via mergeable commands in mouseMoveEvent
+            # So we don't need to push a final command here. 
+            # The 'drag_obj_*' state was just for calculation.
+            pass
             
             self.panning = False
             self.active_handle = self.HANDLE_NONE
@@ -466,7 +564,21 @@ class SceneCanvas(QWidget):
     def hit_test(self, wx, wy):
         scene = self.state.current_scene
         if not scene: return None
-        for obj in reversed(scene.objects):
+        # Sort by visual order (High Layers on Top)
+        # We want to pick the "Topmost" object, so highest Layer first.
+        # Layer: Text(100) > Sprite(0) > Background(-100)
+        # Sort key: Layer
+        def get_layer(o):
+            bg = o.get("components", {}).get("Background")
+            if bg: return bg.get("layer", -100)
+            sr = o.get("components", {}).get("SpriteRenderer")
+            if sr: return sr.get("layer", 0)
+            return 0
+        
+        # Sort Descending (Highest First)
+        sorted_objs = sorted(scene.objects, key=get_layer, reverse=True)
+
+        for obj in sorted_objs:
             if not obj.get("active", True): continue
             
             cx, cy, w, h, rotation = self.get_obj_geometry(obj)

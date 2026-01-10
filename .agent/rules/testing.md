@@ -13,3 +13,4 @@ For every feature:
 1. Ask a **Yes/No question**
 2. Define **what “Yes” output looks like**
 3. Define **what “No” output looks like**
+4. once you make changes alwys run it ti check if the program crashes or not 

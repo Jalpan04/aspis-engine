@@ -14,7 +14,7 @@
             0.0,
             0.0
           ],
-          "rotation": 0.0,
+          "rotation": 32.50835912460818,
           "scale": [
             1.0,
             1.0
@@ -28,11 +28,25 @@
         "RigidBody": {
           "mass": 20.0,
           "drag": 0.0,
-          "use_gravity": false,
+          "use_gravity": true,
           "velocity": [
             0.0,
             0.0
           ]
+        },
+        "BoxCollider": {
+          "size": [
+            50.0,
+            50.0
+          ],
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "is_trigger": false
+        },
+        "Script": {
+          "script_path": "scripts\\PlayerController.py"
         }
       }
     },
@@ -54,8 +68,8 @@
         },
         "BoxCollider": {
           "size": [
-            50.0,
-            50.0
+            298.1070451327026,
+            298.1070451327026
           ],
           "offset": [
             0.0,

@@ -6,6 +6,16 @@ import math
 class PongBall(Script):
     def start(self):
         self.speed = 400.0
+        self.score_left = 0
+        self.score_right = 0
+        
+        # Cache Text Objects
+        self.txt_left_obj = self.find_object("ScoreTextLeft")
+        self.txt_right_obj = self.find_object("ScoreTextRight")
+        
+        if not self.txt_left_obj or not self.txt_right_obj:
+            print("Warning: Score Texts not found!")
+            
         self.reset_ball()
 
     def reset_ball(self):
@@ -43,11 +53,40 @@ class PongBall(Script):
         
         # Check scoring (out of bounds)
         x = self.transform.position[0]
-        if x < -450 or x > 450: # Screen width 800 ( +/- 400). margin 50.
-            print("Score! Resetting...")
+        if x < -450: # Left Limit -> Right Scores
+            self.score_right += 1
+            self.play_sound("hit.wav") # Sound feedback
+            self.update_ui()
             self.reset_ball()
+        elif x > 450: # Right Limit -> Left Scores
+            self.score_left += 1
+            self.play_sound("hit.wav")
+            self.update_ui()
+            self.reset_ball()
+            
+    def update_ui(self):
+        if self.txt_left_obj and "TextRenderer" in self.txt_left_obj.components:
+            self.txt_left_obj.components["TextRenderer"]["text"] = str(self.score_left)
+            
+        if self.txt_right_obj and "TextRenderer" in self.txt_right_obj.components:
+            self.txt_right_obj.components["TextRenderer"]["text"] = str(self.score_right)
 
     def on_collision_enter(self, other):
         # Simple feedback
         # print("Bounced!")
-        pass
+        # Play bounce sound
+        self.play_sound("hit.wav")
+        
+        # Increase speed slightly on paddle hit?
+        if "Paddle" in other.name:
+            self.speed += 10.0
+            
+        # Wall Scoring
+        if other.name == "WallLeft":
+            self.score_right += 1
+            self.update_ui()
+            self.reset_ball()
+        elif other.name == "WallRight":
+            self.score_left += 1
+            self.update_ui()
+            self.reset_ball()

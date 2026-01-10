@@ -33,9 +33,20 @@ class MainWindow(QMainWindow):
         self.state.load_scene(Scene.create_empty("Untitled Scene"))
 
     def setup_ui(self):
-        # 1. Central Widget - Canvas
+        # 1. Central Area (Tabs: Scene | Script)
+        from PySide6.QtWidgets import QTabWidget
+        from editor.code_editor import CodeEditor
+        
+        self.central_tabs = QTabWidget()
+        self.setCentralWidget(self.central_tabs)
+        
+        # Tab 1: Scene Canvas
         self.canvas = SceneCanvas()
-        self.setCentralWidget(self.canvas)
+        self.central_tabs.addTab(self.canvas, "Scene")
+        
+        # Tab 2: Script Editor
+        self.code_editor = CodeEditor()
+        self.central_tabs.addTab(self.code_editor, "Script")
 
         # 2. Hierarchy (Left)
         self.dock_hierarchy = QDockWidget("Hierarchy", self)
@@ -60,16 +71,30 @@ class MainWindow(QMainWindow):
         self.dock_assets.setWidget(asset_browser)
         self.dock_assets.setAllowedAreas(Qt.BottomDockWidgetArea)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.dock_assets)
+        
+        # Connect Asset Browser
+        asset_browser.file_opened.connect(self.open_script)
 
-        # Toolbar
-        self.toolbar = self.addToolBar("Main")
-        from PySide6.QtWidgets import QPushButton
-        play_btn = QPushButton("▶ Play")
-        play_btn.clicked.connect(self.run_game)
-        play_btn.setStyleSheet("color: #44ff44; font-weight: bold; padding: 4px 10px; background: #333333; border: 1px solid #444444;")
-        self.toolbar.addWidget(play_btn)
-
+        # Apply Theme
         self.apply_theme()
+        
+        # --- Play Button in Menu Bar (Right Corner) ---
+        from PySide6.QtWidgets import QPushButton
+        self.play_btn = QPushButton("PLAY") 
+        # self.play_btn.setFixedSize(60, 22) # Remove fixed size, let style handle padding
+        self.play_btn.setCursor(Qt.PointingHandCursor)
+        self.play_btn.setObjectName("PlayButton")
+        self.play_btn.clicked.connect(self.run_game)
+        
+        # This puts it in the same row as File, Edit, View
+        self.menuBar().setCornerWidget(self.play_btn, Qt.TopRightCorner)
+
+    def open_script(self, path):
+        """Opens a script in the built-in editor."""
+        if path.endswith(".py") or path.endswith(".json"):
+            self.code_editor.load_file(path)
+            self.central_tabs.setCurrentWidget(self.code_editor)
+
 
     def setup_menu(self):
         menu_bar = self.menuBar()
@@ -107,6 +132,52 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self.dock_hierarchy.toggleViewAction())
         view_menu.addAction(self.dock_inspector.toggleViewAction())
         view_menu.addAction(self.dock_assets.toggleViewAction())
+        
+        # Scene Menu
+        scene_menu = menu_bar.addMenu("Scene")
+        scene_menu.addAction("Settings").triggered.connect(self.show_scene_settings)
+
+    def show_scene_settings(self):
+        scene = self.state.current_scene
+        if not scene: return
+        
+        from PySide6.QtWidgets import QDialog, QFormLayout, QPushButton, QColorDialog
+        from PySide6.QtGui import QColor
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Scene Settings")
+        dialog.setFixedSize(300, 150)
+        
+        layout = QFormLayout(dialog)
+        
+        # Background Color
+        current_color = scene.settings.get("background_color", [20, 20, 20, 255])
+        
+        color_btn = QPushButton()
+        color_btn.setStyleSheet(f"background-color: rgba({current_color[0]}, {current_color[1]}, {current_color[2]}, 255); border: 1px solid #555;")
+        color_btn.setFixedHeight(30)
+        
+        def pick_color():
+            c = QColorDialog.getColor(
+                QColor(current_color[0], current_color[1], current_color[2]), 
+                self, 
+                "Pick Background Color"
+            )
+            if c.isValid():
+                new_c = [c.red(), c.green(), c.blue(), 255]
+                scene.settings["background_color"] = new_c
+                color_btn.setStyleSheet(f"background-color: rgba({new_c[0]}, {new_c[1]}, {new_c[2]}, 255); border: 1px solid #555;")
+                self.canvas.update() # Preview immediately
+                
+        color_btn.clicked.connect(pick_color)
+        layout.addRow("Background Color:", color_btn)
+        
+        # Close Button
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        layout.addRow(close_btn)
+        
+        dialog.exec()
 
     def refresh_ui(self):
         """Force a UI refresh after undo/redo."""
@@ -190,84 +261,189 @@ class MainWindow(QMainWindow):
             self.save_scene()
 
     def apply_theme(self):
-        # Sharp dark theme - no rounded corners, space efficient
+        # Brutalist Dark Theme - Sharp Edges, Monochrome
         self.setStyleSheet("""
             * {
-                border-radius: 0px;
+                border-radius: 0px !important;
+                outline: none;
             }
-            QMainWindow {
-                background-color: #1a1a1a;
-            }
-            QDockWidget {
-                titlebar-close-icon: url(close.png);
-                titlebar-normal-icon: url(float.png);
-            }
-            QDockWidget::title {
-                text-align: left;
-                background: #222222;
-                padding: 3px 5px;
-                color: #999999;
-                font-weight: normal;
-                font-size: 11px;
-            }
-            QWidget {
-                color: #b0b0b0;
-                background-color: #1a1a1a;
+            QMainWindow, QWidget {
+                background-color: #121212;
+                color: #cccccc;
                 font-family: 'Segoe UI', sans-serif;
                 font-size: 11px;
             }
-            QTreeView, QTreeWidget {
-                background-color: #1e1e1e;
-                border: none;
-                color: #a0a0a0;
+            
+            /* Docks */
+            QDockWidget {
+                titlebar-close-icon: url(close.png);
+                titlebar-normal-icon: url(float.png);
+                border: 1px solid #1a1a1a;
             }
-            QTreeView::item, QTreeWidget::item {
-                padding: 2px 0;
+            
+            /* Toolbar */
+            QToolBar {
+                background: #121212;
+                border-bottom: 1px solid #333333;
+                spacing: 10px;
+                padding: 5px;
+            }
+            
+            QDockWidget::title {
+                text-align: left;
+                background: #1a1a1a;
+                padding: 4px 8px;
+                color: #eeeeee;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            
+            /* Trees / Lists */
+            QTreeView, QTreeWidget, QListView, QListWidget, QPlainTextEdit {
+                background-color: #181818;
+                border: 1px solid #282828;
+                color: #cccccc;
+            }
+            QTreeView::item:selected, QListView::item:selected {
+                background-color: #333333;
+                color: white;
             }
             QHeaderView::section {
-                background-color: #252525;
+                background-color: #1a1a1a;
                 color: #888888;
                 border: none;
-                padding: 3px;
-                font-size: 10px;
+                border-right: 1px solid #282828;
+                padding: 4px;
+                text-transform: uppercase;
             }
-            QMenuBar {
-                background-color: #1e1e1e;
-                color: #999999;
-                padding: 2px;
-            }
-            QMenuBar::item {
-                padding: 3px 8px;
-            }
-            QMenuBar::item:selected {
-                background-color: #2a2a2a;
-            }
-            QMenu {
-                background-color: #1e1e1e;
-                color: #999999;
-                border: 1px solid #333333;
-            }
-            QMenu::item {
-                padding: 4px 20px;
-            }
-            QMenu::item:selected {
-                background-color: #2a2a2a;
-            }
+            
+            /* Buttons */
             QPushButton {
-                background: #2a2a2a;
-                color: #999999;
+                background: #252525;
+                color: #cccccc;
                 border: 1px solid #333333;
-                padding: 3px 8px;
-                font-size: 10px;
+                padding: 5px 12px;
+                text-transform: uppercase;
+                font-weight: bold;
             }
             QPushButton:hover {
                 background: #333333;
+                border-color: #444444;
+                color: white;
             }
-            QScrollArea {
-                border: none;
+            QPushButton:pressed {
+                background: #111111;
+                border-color: #444444;
             }
-            QLabel {
+            
+            /* Menus */
+            QMenuBar {
+                background-color: #121212;
+                border-bottom: 1px solid #1a1a1a;
+            }
+            QMenuBar::item {
+                padding: 4px 10px;
                 background: transparent;
+            }
+            QMenuBar::item:selected {
+                background: #252525;
+                color: white;
+            }
+            QMenu {
+                background-color: #181818;
+                border: 1px solid #333333;
+            }
+            QMenu::item {
+                padding: 5px 25px 5px 15px;
+            }
+            QMenu::item:selected {
+                background-color: #252525;
+                color: white;
+            }
+            
+            /* Tabs */
+            QTabWidget::pane {
+                border: 1px solid #282828;
+                background: #121212;
+            }
+            QTabBar::tab {
+                background: #1a1a1a;
+                color: #888888;
+                padding: 6px 16px;
+                border: 1px solid #1a1a1a;
+                border-bottom: none;
+                margin-right: 1px;
+                text-transform: uppercase;
+                font-weight: bold;
+            }
+            QTabBar::tab:selected {
+                background: #252525;
+                color: #ffffff;
+                border-top: 2px solid #666666;
+            }
+            QTabBar::tab:hover {
+                background: #222222;
+                color: #cccccc;
+            }
+            
+            /* Scrollbars */
+            QScrollBar:vertical {
+                border: none;
+                background: #121212;
+                width: 12px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #333333;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #444444;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            
+            /* Input Fields */
+            QLineEdit, QSpinBox, QDoubleSpinBox {
+                background: #111111;
+                border: 1px solid #333333;
+                color: #eeeeee;
+                padding: 3px;
+                selection-background-color: #444444;
+            }
+            QLineEdit:focus {
+                border: 1px solid #555555;
+            }
+            
+            /* Separators */
+            QMainWindow::separator {
+                background: #121212;
+                width: 4px;
+                height: 4px;
+            }
+            QMainWindow::separator:hover {
+                background: #444444;
+            }
+            
+            /* Play Button - Menu Item Style */
+            QPushButton#PlayButton {
+                background-color: transparent;
+                color: #00ff00; /* Green Text */
+                border: 1px solid #00aa00;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 11px;
+                padding: 4px 15px;
+                text-transform: uppercase; /* Match section headers? Or match File/Edit? Let's assume standard */
+                font-weight: bold; 
+            }
+            QPushButton#PlayButton:hover {
+                background-color: #00aa00;
+                color: white;
+            }
+            QPushButton#PlayButton:pressed {
+                background-color: #008800;
+                color: white;
             }
         """)
 

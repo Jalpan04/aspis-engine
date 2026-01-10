@@ -29,6 +29,62 @@
       }
     },
     {
+      "id": "score_text_left",
+      "name": "ScoreTextLeft",
+      "active": true,
+      "components": {
+        "Transform": {
+          "position": [
+            -200,
+            -200
+          ],
+          "rotation": 0,
+          "scale": [
+            1,
+            1
+          ]
+        },
+        "TextRenderer": {
+          "text": "0",
+          "font_size": 120,
+          "color": [
+            255,
+            255,
+            255
+          ],
+          "layer": 100
+        }
+      }
+    },
+    {
+      "id": "score_text_right",
+      "name": "ScoreTextRight",
+      "active": true,
+      "components": {
+        "Transform": {
+          "position": [
+            200,
+            -200
+          ],
+          "rotation": 0,
+          "scale": [
+            1,
+            1
+          ]
+        },
+        "TextRenderer": {
+          "text": "0",
+          "font_size": 120,
+          "color": [
+            255,
+            255,
+            255
+          ],
+          "layer": 100
+        }
+      }
+    },
+    {
       "id": "paddle_left",
       "name": "PaddleLeft",
       "active": true,
@@ -41,7 +97,7 @@
           "rotation": 0,
           "scale": [
             0.4,
-            2.0
+            3.0
           ]
         },
         "SpriteRenderer": {
@@ -49,8 +105,8 @@
           "layer": 1,
           "visible": true,
           "tint": [
-            255,
             50,
+            255,
             50,
             255
           ]
@@ -58,7 +114,7 @@
         "BoxCollider": {
           "size": [
             20,
-            100
+            150
           ],
           "offset": [
             0,
@@ -67,10 +123,11 @@
           "is_trigger": false
         },
         "RigidBody": {
-          "mass": 50.0,
-          "drag": 5.0,
+          "mass": 100.0,
+          "drag": 10.0,
           "use_gravity": false,
-          "restitution": 0.0
+          "restitution": 1.0,
+          "fixed_rotation": true
         },
         "Script": {
           "script_path": "scripts/PongPaddle.py"
@@ -90,7 +147,7 @@
           "rotation": 0,
           "scale": [
             0.4,
-            4.0
+            3.0
           ]
         },
         "SpriteRenderer": {
@@ -99,15 +156,15 @@
           "visible": true,
           "tint": [
             50,
-            50,
             255,
+            50,
             255
           ]
         },
         "BoxCollider": {
           "size": [
-            20.0,
-            200.0
+            20,
+            150
           ],
           "offset": [
             0,
@@ -116,10 +173,11 @@
           "is_trigger": false
         },
         "RigidBody": {
-          "mass": 50.0,
-          "drag": 5.0,
+          "mass": 100.0,
+          "drag": 10.0,
           "use_gravity": false,
-          "restitution": 0.0
+          "restitution": 1.0,
+          "fixed_rotation": true
         },
         "Script": {
           "script_path": "scripts/PongPaddle.py"
@@ -138,8 +196,8 @@
           ],
           "rotation": 0,
           "scale": [
-            0.4,
-            0.4
+            1.0,
+            1.0
           ]
         },
         "SpriteRenderer": {
@@ -147,17 +205,14 @@
           "layer": 2,
           "visible": true,
           "tint": [
-            0,
-            255,
-            0,
+            215,
+            213,
+            9,
             255
           ]
         },
-        "BoxCollider": {
-          "size": [
-            20,
-            20
-          ],
+        "CircleCollider": {
+          "radius": 12.5,
           "offset": [
             0,
             0
@@ -170,15 +225,13 @@
           "use_gravity": false,
           "restitution": 1.0,
           "velocity": [
-            200,
-            200
-          ]
+            300,
+            300
+          ],
+          "fixed_rotation": true
         },
         "Script": {
-          "script_path": "scripts/PongBall.py",
-          "properties": {
-            "speed": 500.0
-          }
+          "script_path": "scripts/PongBall.py"
         }
       }
     },
@@ -203,9 +256,9 @@
           "layer": 0,
           "visible": true,
           "tint": [
-            100,
-            100,
-            100,
+            129,
+            129,
+            129,
             255
           ]
         },
@@ -249,9 +302,9 @@
           "layer": 0,
           "visible": true,
           "tint": [
-            100,
-            100,
-            100,
+            129,
+            129,
+            129,
             255
           ]
         },
@@ -275,19 +328,30 @@
       }
     },
     {
-      "id": "wall_left_limit",
-      "name": "LimitLeft",
+      "id": "wall_left",
+      "name": "WallLeft",
       "active": true,
       "components": {
         "Transform": {
           "position": [
-            -410,
-            0
+            -392.0,
+            -1.3333333333333428
           ],
           "rotation": 0,
           "scale": [
             0.4,
             12.0
+          ]
+        },
+        "SpriteRenderer": {
+          "sprite_path": "",
+          "layer": 0,
+          "visible": true,
+          "tint": [
+            44,
+            158,
+            76,
+            255
           ]
         },
         "BoxCollider": {
@@ -299,13 +363,19 @@
             0,
             0
           ],
-          "is_trigger": true
+          "is_trigger": false
+        },
+        "RigidBody": {
+          "mass": 0.0,
+          "drag": 0.0,
+          "use_gravity": false,
+          "restitution": 1.0
         }
       }
     },
     {
-      "id": "wall_right_limit",
-      "name": "LimitRight",
+      "id": "wall_right",
+      "name": "WallRight",
       "active": true,
       "components": {
         "Transform": {
@@ -319,6 +389,17 @@
             12.0
           ]
         },
+        "SpriteRenderer": {
+          "sprite_path": "",
+          "layer": 0,
+          "visible": true,
+          "tint": [
+            129,
+            129,
+            129,
+            255
+          ]
+        },
         "BoxCollider": {
           "size": [
             20,
@@ -328,10 +409,54 @@
             0,
             0
           ],
-          "is_trigger": true
+          "is_trigger": false
+        },
+        "RigidBody": {
+          "mass": 0.0,
+          "drag": 0.0,
+          "use_gravity": false,
+          "restitution": 1.0
+        }
+      }
+    },
+    {
+      "id": "bf497a00-9fd7-4c12-b200-e1fb127c854f",
+      "name": "Background",
+      "active": true,
+      "parent": null,
+      "components": {
+        "Transform": {
+          "position": [
+            0.0,
+            0.0
+          ],
+          "rotation": 0.0,
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "parent_id": null
+        },
+        "Background": {
+          "color": [
+            116,
+            247,
+            243,
+            42
+          ],
+          "fixed": true,
+          "sprite_path": ""
         }
       }
     }
   ],
-  "prefabs": {}
+  "prefabs": {},
+  "settings": {
+    "background_color": [
+      20,
+      20,
+      20,
+      255
+    ]
+  }
 }

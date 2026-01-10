@@ -45,16 +45,30 @@ class HierarchyPanel(QWidget):
         self.state = EditorState.instance()
         self.state.scene_loaded.connect(self.refresh)
 
+        self.tree.clear()
+        self.refresh()
+
+        # Enable Drag & Drop
+        self.tree.setDragEnabled(True)
+        self.tree.setAcceptDrops(True)
+        self.tree.setDragDropMode(QTreeWidget.InternalMove)
+        self.tree.setDefaultDropAction(Qt.MoveAction)
+
     def refresh(self):
         self.tree.clear()
         scene = self.state.current_scene
         if not scene:
             return
 
+        # 1. Create all items first
+        item_map = {} # id -> QTreeWidgetItem
+        orphans = []
+        
         for obj in scene.objects:
-            item = QTreeWidgetItem(self.tree)
+            item = QTreeWidgetItem()
             name = obj.get("name", "Unnamed")
             active = obj.get("active", True)
+            obj_id = obj.get("id")
             
             if active:
                 item.setText(0, name)
@@ -62,8 +76,78 @@ class HierarchyPanel(QWidget):
                 item.setText(0, f"[x] {name}")
                 item.setForeground(0, Qt.gray)
             
-            item.setData(0, Qt.UserRole, obj.get("id"))
-    
+            item.setData(0, Qt.UserRole, obj_id)
+            item_map[obj_id] = item
+            
+        # 2. Build Tree Structure
+        for obj in scene.objects:
+            obj_id = obj.get("id")
+            # Get Parent from Transform
+            parent_id = None
+            if "Transform" in obj.get("components", {}):
+                parent_id = obj["components"]["Transform"].get("parent_id")
+
+            item = item_map[obj_id]
+            
+            if parent_id and parent_id in item_map:
+                # Attach to parent
+                parent_item = item_map[parent_id]
+                parent_item.addChild(item)
+            else:
+                # Root item (or orphan)
+                self.tree.addTopLevelItem(item)
+                
+        self.tree.expandAll()
+
+    def dropEvent(self, event):
+        item = self.tree.currentItem() # The item being dragged
+        if not item: 
+            event.ignore()
+            return
+            
+        target_item = self.tree.itemAt(event.position().toPoint())
+        drop_indicator = self.tree.dropIndicatorPosition()
+        
+        obj_id = item.data(0, Qt.UserRole)
+        # Find object data
+        obj = self.state.get_object_by_id(obj_id)
+        if not obj: return
+        
+        new_parent_id = None
+        
+        if target_item:
+            # Dropped ON an item -> becomes child
+            if drop_indicator == QTreeWidget.OnItem:
+                new_parent_id = target_item.data(0, Qt.UserRole)
+                if new_parent_id == obj_id:
+                    event.ignore()
+                    return
+            
+            # Dropped ABOVE/BELOW -> becomes sibling (same parent as target)
+            elif drop_indicator in (QTreeWidget.AboveItem, QTreeWidget.BelowItem):
+                target_obj_id = target_item.data(0, Qt.UserRole)
+                target_obj = self.state.get_object_by_id(target_obj_id)
+                if target_obj and "Transform" in target_obj.get("components", {}):
+                    new_parent_id = target_obj["components"]["Transform"].get("parent_id")
+        
+        # Execute Command
+        from editor.undo_redo import ReparentCommand
+        cmd = ReparentCommand(self.state.current_scene, obj, new_parent_id)
+        self.state.undo_stack.push(cmd)
+        cmd.redo()
+        
+        # Refresh UI
+        self.refresh()
+        self.state.selection_changed.emit(obj_id) # keep selection
+        event.accept()
+
+    # Override standard drag events to allow drop
+    def dragEnterEvent(self, event):
+        event.accept()
+        
+    def dragMoveEvent(self, event):
+        event.accept()
+        
     def refresh_tree(self):
         self.refresh()
     
@@ -108,6 +192,8 @@ class HierarchyPanel(QWidget):
         menu.addAction("Light", lambda: self.add_new_object("Light", {"LightSource": {}}))
         menu.addAction("Circle", lambda: self.add_new_object("Circle", {"CircleCollider": {}}))
         menu.addAction("Square", lambda: self.add_new_object("Square", {"SpriteRenderer": {}, "BoxCollider": {}}))
+        menu.addAction("Text", lambda: self.add_new_object("Text", {"TextRenderer": {"text": "New Text", "font_size": 24, "color": [255, 255, 255]}}))
+        menu.addAction("Background", lambda: self.add_new_object("Background", {"Background": {}}))
 
     def rename_object(self, item):
         obj_id = item.data(0, Qt.UserRole)
@@ -128,18 +214,70 @@ class HierarchyPanel(QWidget):
         obj_id = item.data(0, Qt.UserRole)
         scene = self.state.current_scene
         
-        # Find index
-        index = -1
-        for i, o in enumerate(scene.objects):
-            if o.get("id") == obj_id:
-                index = i
-                break
+        # Command now handles finding indices and recursion
+        cmd = DeleteObjectCommand(scene, obj_id)
+        self.state.undo_stack.push(cmd)
+        cmd.redo()
+        self.window().refresh_ui()
+
+    def save_prefab(self, item):
+        obj_id = item.data(0, Qt.UserRole)
+        obj = self.state.get_object_by_id(obj_id)
+        if not obj:
+            return
+            
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        import json
+        import os
         
-        if index != -1:
-            cmd = DeleteObjectCommand(scene, index)
-            self.state.undo_stack.push(cmd)
-            cmd.redo()
-            self.window().refresh_ui()
+        # Default filename = object name
+        safe_name = "".join(c for c in obj.get("name", "prefab") if c.isalnum() or c in (' ', '_', '-')).strip()
+        
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Prefab",
+            os.path.join(self.state.project_root, "assets", f"{safe_name}.prefab"),
+            "Prefab Files (*.prefab)"
+        )
+        
+        if path:
+            print(f"Attempting to save prefab to: {path}")
+            try:
+                with open(path, 'w') as f:
+                    json.dump(obj, f, indent=2)
+                print(f"Saved prefab to {path}")
+                
+                # Notify asset browser to refresh
+                self.state.scene_loaded.emit() 
+                
+            except Exception as e:
+                print(f"Error saving prefab: {e}")
+                QMessageBox.critical(self, "Error", f"Failed to save prefab:\n{e}")
+
+    def add_new_object(self, name="New Object", components=None):
+        scene = self.state.current_scene
+        if not scene:
+            return
+        
+        new_obj = GameObject.create(name)
+        if components:
+            from shared.component_defs import Camera, LightSource, CircleCollider, SpriteRenderer, BoxCollider, COMPONENT_MAP
+            # Helper to get defaults
+            defaults = {
+                "Camera": {"width": 1280, "height": 720, "zoom": 1.0, "is_main": False},
+                "LightSource": {"color": [255, 255, 255, 255], "intensity": 1.0, "radius": 200.0, "type": "point"},
+                "CircleCollider": {"radius": 25.0, "offset": [0.0, 0.0], "is_trigger": False},
+                "SpriteRenderer": {"sprite_path": "", "layer": 0, "visible": True, "tint": [255, 255, 255, 255]},
+                "BoxCollider": {"size": [50.0, 50.0], "offset": [0.0, 0.0], "is_trigger": False},
+                "Background": {"sprite_path": "", "color": [255, 255, 255, 255], "loop_x": False, "loop_y": False, "scroll_speed": [0.0, 0.0], "fixed": True, "layer": -100}
+            }
+        obj_id = item.data(0, Qt.UserRole)
+        scene = self.state.current_scene
+        
+        # Command now handles finding indices and recursion
+        cmd = DeleteObjectCommand(scene, obj_id)
+        self.state.undo_stack.push(cmd)
+        cmd.redo()
+        self.window().refresh_ui()
 
     def save_prefab(self, item):
         obj_id = item.data(0, Qt.UserRole)
@@ -196,6 +334,11 @@ class HierarchyPanel(QWidget):
                 data = defaults.get(comp_name, {}).copy()
                 data.update(comp_data)
                 new_obj.components[comp_name] = data
+
+        # Contextual Spawn: Child of selected object
+        selected_id = self.state.selected_object_id
+        if selected_id:
+            new_obj.parent = selected_id
 
         # Try to spawn at canvas center
         from editor.canvas import SceneCanvas
